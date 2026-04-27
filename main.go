@@ -2,16 +2,25 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jlaffaye/ftp"
 	"github.com/joho/godotenv"
 )
+
+type FtpConfig struct {
+	Host         string
+	UserName     string
+	Password     string
+	SaveLocation string
+	WorldId      string
+}
 
 func main() {
 	env := os.Getenv("ENV")
@@ -21,18 +30,51 @@ func main() {
 		}
 	}
 
-	c, err := ftpConnect()
+	host := os.Getenv("FTP_HOST")
+	if host == "" {
+		log.Fatal("failed to load FTP_HOST var")
+	}
+
+	user := os.Getenv("FTP_USER")
+	if user == "" {
+		log.Fatal("failed to load FTP_USER var")
+	}
+
+	pass := os.Getenv("FTP_PASS")
+	if pass == "" {
+		log.Fatal("failed to load FTP_PASS var")
+	}
+
+	savePath := os.Getenv("WORLD_SAVE_LOCATION")
+	if savePath == "" {
+		log.Fatal("failed to load WORLD_SAVE_LOCATION var")
+	}
+
+	worldId := os.Getenv("WORLD_ID")
+	if worldId == "" {
+		log.Fatal("failed to load WORLD_ID var")
+	}
+
+	config := &FtpConfig{
+		Host:         host,
+		UserName:     user,
+		Password:     pass,
+		SaveLocation: savePath,
+		WorldId:      worldId,
+	}
+
+	c, err := ftpConnect(config)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer c.Quit()
 
-	files, err := listSaveFiles(c)
+	files, err := listSaveFiles(c, config)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	zipPath, err := saveFiles(c, files)
+	zipPath, err := saveFiles(c, config, files)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,45 +82,27 @@ func main() {
 	fmt.Println("created zip:", zipPath)
 }
 
-func ftpConnect() (*ftp.ServerConn, error) {
-	host := os.Getenv("FTP_HOST")
-	if host == "" {
-		return nil, fmt.Errorf("failed to load FTP_HOST var")
-	}
-
-	user := os.Getenv("FTP_USER")
-	if user == "" {
-		return nil, fmt.Errorf("failed to load FTP_USER var")
-	}
-
-	pass := os.Getenv("FTP_PASS")
-	if pass == "" {
-		return nil, fmt.Errorf("failed to load FTP_PASS var")
-	}
-
-	c, err := ftp.Dial("ukln082.gamedata.io:21", ftp.DialWithTimeout(5*time.Second))
+func ftpConnect(config *FtpConfig) (*ftp.ServerConn, error) {
+	c, err := ftp.Dial(
+		config.Host,
+		ftp.DialWithTimeout(5*time.Second),
+		ftp.DialWithExplicitTLS(&tls.Config{
+			InsecureSkipVerify: true,
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := c.Login(user, pass); err != nil {
+	if err := c.Login(config.UserName, config.Password); err != nil {
 		return nil, err
 	}
 
 	return c, nil
 }
 
-func listSaveFiles(c *ftp.ServerConn) ([]string, error) {
-	savePath := os.Getenv("WORLD_SAVE_LOCATION")
-	if savePath == "" {
-		return nil, fmt.Errorf("failed to load WORLD_SAVE_LOCATION var")
-	}
-	worldId := os.Getenv("WORLD_ID")
-	if worldId == "" {
-		return nil, fmt.Errorf("failed to load WORLD_ID var")
-	}
-	worldPath := fmt.Sprintf("%s/%s", savePath, worldId)
-
+func listSaveFiles(c *ftp.ServerConn, config *FtpConfig) ([]string, error) {
+	worldPath := fmt.Sprintf("%s/%s", config.SaveLocation, config.WorldId)
 	files, err := c.NameList(worldPath)
 	if err != nil {
 		return nil, err
@@ -87,13 +111,8 @@ func listSaveFiles(c *ftp.ServerConn) ([]string, error) {
 	return files, nil
 }
 
-func saveFiles(c *ftp.ServerConn, paths []string) (string, error) {
-	worldId := os.Getenv("WORLD_ID")
-	if worldId == "" {
-		return "", fmt.Errorf("failed to load WORLD_ID var")
-	}
-
-	zipFileName := fmt.Sprintf("%s_%s.zip", worldId, timestamp())
+func saveFiles(c *ftp.ServerConn, config *FtpConfig, paths []string) (string, error) {
+	zipFileName := fmt.Sprintf("%s_%s.zip", config.WorldId, timestamp())
 	outFile, err := os.Create(zipFileName)
 	if err != nil {
 		return "", err
@@ -109,7 +128,8 @@ func saveFiles(c *ftp.ServerConn, paths []string) (string, error) {
 			return "", err
 		}
 
-		fileName := filepath.Base(p)
+		fileName := strings.TrimPrefix(p, "/")
+		fmt.Printf("downloading %s...\n", fileName)
 		w, err := zipWriter.Create(fileName)
 		if err != nil {
 			r.Close()
