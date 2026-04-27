@@ -18,3 +18,5 @@ WORLD_ID="WORLD ID"
 WORLD_SAVE_LOCATION="windrose/R5/Saved/SaveProfiles/Default/RocksDB/0.10.0/Worlds"  
 
 With that set, open a terminal in the root and call `go run main.go`
+
+Resulting download will be placed in a zip file with the name of your world ID and the current timestamp
