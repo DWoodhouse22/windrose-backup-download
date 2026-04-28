@@ -41,3 +41,4 @@ go.work.sum
 
 # Code output
 *.zip
+config.json

@@ -1,0 +1,6 @@
+{
+  "host": "ftp.example.com:21",
+  "username": "myuser",
+  "password": "mypassword",
+  "world_id": "world123"
+}

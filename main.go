@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,58 +12,27 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
-	"github.com/joho/godotenv"
 )
 
 type FtpConfig struct {
-	Host         string
-	UserName     string
-	Password     string
-	SaveLocation string
-	WorldId      string
+	Host     string `json:"host"`
+	UserName string `json:"username"`
+	Password string `json:"password"`
+	WorldId  string `json:"world_id"`
 }
 
+const saveDir = "windrose/R5/Saved/SaveProfiles/Default/RocksDB/0.10.0/Worlds"
+
 func main() {
-	env := os.Getenv("ENV")
-	if env != "prod" {
-		if err := godotenv.Load(); err != nil {
-			log.Fatal("error loading .env file")
-		}
+	configPath := "config.json"
+	if len(os.Args) > 1 {
+		configPath = os.Args[1]
 	}
 
-	host := os.Getenv("FTP_HOST")
-	if host == "" {
-		log.Fatal("failed to load FTP_HOST var")
+	config, err := loadConfig(configPath)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	user := os.Getenv("FTP_USER")
-	if user == "" {
-		log.Fatal("failed to load FTP_USER var")
-	}
-
-	pass := os.Getenv("FTP_PASS")
-	if pass == "" {
-		log.Fatal("failed to load FTP_PASS var")
-	}
-
-	savePath := os.Getenv("WORLD_SAVE_LOCATION")
-	if savePath == "" {
-		log.Fatal("failed to load WORLD_SAVE_LOCATION var")
-	}
-
-	worldId := os.Getenv("WORLD_ID")
-	if worldId == "" {
-		log.Fatal("failed to load WORLD_ID var")
-	}
-
-	config := &FtpConfig{
-		Host:         host,
-		UserName:     user,
-		Password:     pass,
-		SaveLocation: savePath,
-		WorldId:      worldId,
-	}
-
 	c, err := ftpConnect(config)
 	if err != nil {
 		log.Fatal(err)
@@ -80,6 +50,23 @@ func main() {
 	}
 
 	fmt.Println("created zip:", zipPath)
+}
+
+func loadConfig(path string) (*FtpConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg FtpConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	if cfg.Host == "" || cfg.Password == "" || cfg.UserName == "" || cfg.WorldId == "" {
+		return nil, fmt.Errorf("invalid config file")
+	}
+	return &cfg, nil
 }
 
 func ftpConnect(config *FtpConfig) (*ftp.ServerConn, error) {
@@ -102,7 +89,7 @@ func ftpConnect(config *FtpConfig) (*ftp.ServerConn, error) {
 }
 
 func listSaveFiles(c *ftp.ServerConn, config *FtpConfig) ([]string, error) {
-	worldPath := fmt.Sprintf("%s/%s", config.SaveLocation, config.WorldId)
+	worldPath := fmt.Sprintf("%s/%s", saveDir, config.WorldId)
 	files, err := c.NameList(worldPath)
 	if err != nil {
 		return nil, err
