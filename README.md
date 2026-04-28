@@ -1,22 +1,11 @@
 # Windrose World Save Downloader
 Simple go code which downloads the current live world save files for semi-regular backups
 
-## Requirements
-Go runtime for your system:  
-[Download](https://go.dev/dl/)
-
 ## Usage
-- Create a `.env` file at the root of the project and add the following variables.
+Download the executable for your platform from the latest release
 
-(Assuming Windrose is hosted on Nitrado)
-Retrieve the FTP credentials from your Nitrado server WebInterface
+Create a config file using the example provided (`config.example.json`) in the same directory you downloaded the executable. Replace the values with your FTP credentials and Windrose World ID
 
-FTP_USER="USERNAME"  
-FTP_PASS="PASSWORD"  
-FTP_HOST="HOSTNAME:PORT"  
-WORLD_ID="WORLD ID"  
-WORLD_SAVE_LOCATION="windrose/R5/Saved/SaveProfiles/Default/RocksDB/0.10.0/Worlds"  
-
-With that set, open a terminal in the root and call `go run main.go`
+Run the executable, by default it will load the file `config.json`. Specify a custom file by providing the file path `./windrose-backup-windows-amd64.exe path/to/my/custom-config.json`
 
 Resulting download will be placed in a zip file with the name of your world ID and the current timestamp
